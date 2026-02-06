@@ -1,10 +1,10 @@
-package com.sportygroup.sports_betting_settlement;
+package com.sportygroup.betsettler;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest
-class SportsBettingSettlementApplicationTests {
+class BetSettlerApplicationTests {
 
 	@Test
 	void contextLoads() {

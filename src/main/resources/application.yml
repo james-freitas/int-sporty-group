@@ -1,0 +1,120 @@
+spring:
+  application:
+    name: betsettler
+  
+  # H2 Database Configuration
+  datasource:
+    url: jdbc:h2:mem:bettingdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: 
+  
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+  
+  # JPA/Hibernate Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+    defer-datasource-initialization: true
+  
+  # SQL Script Initialization
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data.sql
+  
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    
+    # Producer Configuration
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        spring.json.add.type.headers: false
+        max.in.flight.requests.per.connection: 5
+        enable.idempotence: true
+    
+    # Consumer Configuration
+    consumer:
+      group-id: betting-settlement-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: "com.sportygroup.betsettler.dto"
+        spring.json.type.mapping: eventOutcome:com.sportygroup.betsettler.dto.EventOutcomeDTO
+    
+    # Listener Configuration
+    listener:
+      ack-mode: manual
+      concurrency: 3
+
+# Custom Application Properties
+application:
+  kafka:
+    topics:
+      event-outcomes: event-outcomes
+  
+  # RocketMQ Configuration
+  rocketmq:
+    enabled: false  # Set to true to use real RocketMQ, false for mock
+    name-server: localhost:9876
+    producer:
+      group: betting-settlement-producer
+      send-msg-timeout: 3000
+      retry-times-when-send-failed: 2
+    consumer:
+      group: betting-settlement-consumer
+      consume-thread-min: 5
+      consume-thread-max: 20
+    topics:
+      bet-settlements: bet-settlements
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.sportygroup.betseller: DEBUG
+    org.springframework.kafka: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+# Server Configuration
+server:
+  port: 8080
+  error:
+    include-message: always
+    include-binding-errors: always
