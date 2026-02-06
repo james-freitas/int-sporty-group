@@ -11,15 +11,13 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
-import org.springframework.test.context.DynamicPropertyRegistry;
-import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.kafka.test.context.EmbeddedKafka;
+import org.springframework.test.annotation.DirtiesContext;
+import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
-import org.testcontainers.containers.KafkaContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
-import org.testcontainers.utility.DockerImageName;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -27,28 +25,30 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 import static org.testcontainers.shaded.org.awaitility.Awaitility.await;
 
-import java.time.Duration;
-
 /**
- * End-to-end integration test for the complete bet settlement flow.
+ * Integration test using Embedded Kafka (no Docker required).
  *
- * Tests the full flow from API call through Kafka to database updates.
+ * This is an alternative to Testcontainers-based tests and works
+ * without Docker installation.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 @AutoConfigureMockMvc
-@Testcontainers
-class BetSettlementIntegrationTest {
-
-    @Container
-    static final KafkaContainer kafka = new KafkaContainer(
-            DockerImageName.parse("confluentinc/cp-kafka:7.6.0")
-    );
-
-    @DynamicPropertySource
-    static void overrideProperties(DynamicPropertyRegistry registry) {
-        registry.add("spring.kafka.bootstrap-servers", kafka::getBootstrapServers);
-        registry.add("application.rocketmq.enabled", () -> "false"); // Use mock
-    }
+@EmbeddedKafka(
+        partitions = 1,
+        topics = {"${application.kafka.topics.event-outcomes}"},
+        brokerProperties = {
+                "listeners=PLAINTEXT://localhost:9093",
+                "port=9093"
+        }
+)
+@TestPropertySource(
+        properties = {
+                "spring.kafka.bootstrap-servers=${spring.embedded.kafka.brokers}",
+                "application.rocketmq.enabled=false"
+        }
+)
+@DirtiesContext(classMode = DirtiesContext.ClassMode.AFTER_EACH_TEST_METHOD)
+class BetSettlementEmbeddedKafkaIntegrationTest {
 
     @Autowired
     private MockMvc mockMvc;
@@ -67,15 +67,15 @@ class BetSettlementIntegrationTest {
     @Test
     void completeFlow_PublishEventOutcome_SettlesBets() throws Exception {
         // Given: Create pending bets in database
-        Bet winningBet = createBet("USER-001", "EVT-INTEGRATION-001", "TEAM-A", "100.00");
-        Bet losingBet = createBet("USER-002", "EVT-INTEGRATION-001", "TEAM-B", "50.00");
+        Bet winningBet = createBet("USER-001", "EVT-EMBEDDED-001", "TEAM-A", "100.00");
+        Bet losingBet = createBet("USER-002", "EVT-EMBEDDED-001", "TEAM-B", "50.00");
 
         betRepository.save(winningBet);
         betRepository.save(losingBet);
 
         PublishEventRequest request = PublishEventRequest.builder()
-                .eventId("EVT-INTEGRATION-001")
-                .eventName("Integration Test Match")
+                .eventId("EVT-EMBEDDED-001")
+                .eventName("Embedded Kafka Test Match")
                 .eventWinnerId("TEAM-A")
                 .build();
 
@@ -90,12 +90,11 @@ class BetSettlementIntegrationTest {
                 .atMost(Duration.ofSeconds(10))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
-                    List<Bet> settledBets = betRepository.findByEventId("EVT-INTEGRATION-001");
+                    List<Bet> settledBets = betRepository.findByEventId("EVT-EMBEDDED-001");
 
                     assertThat(settledBets).hasSize(2);
                     assertThat(settledBets).allMatch(bet -> bet.getSettledAt() != null);
 
-                    // Find the winning and losing bet
                     Bet wonBet = settledBets.stream()
                             .filter(b -> b.getUserId().equals("USER-001"))
                             .findFirst()
@@ -113,58 +112,47 @@ class BetSettlementIntegrationTest {
 
     @Test
     void publishEventOutcome_WithNoPendingBets_ProcessesWithoutError() throws Exception {
-        // Given: No pending bets for this event
         PublishEventRequest request = PublishEventRequest.builder()
-                .eventId("EVT-NO-BETS")
+                .eventId("EVT-NO-BETS-EMBEDDED")
                 .eventName("Event With No Bets")
                 .eventWinnerId("TEAM-X")
                 .build();
 
-        // When & Then: Should process without error
         mockMvc.perform(post("/api/events/outcomes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isAccepted());
 
-        // Give it time to process
         Thread.sleep(2000);
 
-        // Verify no errors occurred (test passes if no exception thrown)
-        List<Bet> bets = betRepository.findByEventId("EVT-NO-BETS");
+        List<Bet> bets = betRepository.findByEventId("EVT-NO-BETS-EMBEDDED");
         assertThat(bets).isEmpty();
     }
 
     @Test
     void publishEventOutcome_WithMultipleBets_SettlesAllCorrectly() throws Exception {
-        // Given: Multiple bets with different predictions
-        betRepository.save(createBet("USER-001", "EVT-MULTI", "WINNER-A", "100.00"));
-        betRepository.save(createBet("USER-002", "EVT-MULTI", "WINNER-A", "50.00"));
-        betRepository.save(createBet("USER-003", "EVT-MULTI", "WINNER-B", "75.00"));
-        betRepository.save(createBet("USER-004", "EVT-MULTI", "WINNER-B", "25.00"));
+        betRepository.save(createBet("USER-001", "EVT-MULTI-EMBEDDED", "WINNER-A", "100.00"));
+        betRepository.save(createBet("USER-002", "EVT-MULTI-EMBEDDED", "WINNER-A", "50.00"));
+        betRepository.save(createBet("USER-003", "EVT-MULTI-EMBEDDED", "WINNER-B", "75.00"));
+        betRepository.save(createBet("USER-004", "EVT-MULTI-EMBEDDED", "WINNER-B", "25.00"));
 
         PublishEventRequest request = PublishEventRequest.builder()
-                .eventId("EVT-MULTI")
+                .eventId("EVT-MULTI-EMBEDDED")
                 .eventName("Multiple Bets Test")
                 .eventWinnerId("WINNER-A")
                 .build();
 
-        // When
         mockMvc.perform(post("/api/events/outcomes")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isAccepted());
 
-        // Then
         await()
                 .atMost(Duration.ofSeconds(10))
                 .pollInterval(Duration.ofMillis(500))
                 .untilAsserted(() -> {
-                    List<Bet> allBets = betRepository.findByEventId("EVT-MULTI");
-
-                    assertThat(allBets).hasSize(4);
-
-                    List<Bet> wonBets = betRepository.findByEventIdAndStatus("EVT-MULTI", BetStatus.WON);
-                    List<Bet> lostBets = betRepository.findByEventIdAndStatus("EVT-MULTI", BetStatus.LOST);
+                    List<Bet> wonBets = betRepository.findByEventIdAndStatus("EVT-MULTI-EMBEDDED", BetStatus.WON);
+                    List<Bet> lostBets = betRepository.findByEventIdAndStatus("EVT-MULTI-EMBEDDED", BetStatus.LOST);
 
                     assertThat(wonBets).hasSize(2);
                     assertThat(lostBets).hasSize(2);
