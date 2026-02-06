@@ -1,0 +1,256 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.5'
+    id 'io.spring.dependency-management' version '1.1.4'
+    id 'jacoco'
+}
+
+group = 'com.sportygroup'
+version = '1.0.0-SNAPSHOT'
+
+java {
+    sourceCompatibility = '17'
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+// Versions
+ext {
+    springKafkaVersion = '3.1.4'
+    kafkaVersion = '3.6.2'
+    rocketmqVersion = '5.1.4'
+    lombokVersion = '1.18.32'
+    testcontainersVersion = '1.19.7'
+    assertjVersion = '3.25.3'
+    hamcrestVersion = '2.2'
+}
+
+dependencies {
+    // Spring Boot Starters
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+    
+    // Kafka
+    implementation "org.springframework.kafka:spring-kafka:${springKafkaVersion}"
+    
+    // RocketMQ (Optional - can be mocked)
+    //implementation "org.apache.rocketmq:rocketmq-client-java:${rocketmqVersion}"
+    // Alternative: implementation 'org.apache.rocketmq:rocketmq-spring-boot-starter:2.3.0'
+    implementation "org.apache.rocketmq:rocketmq-spring-boot-starter:2.3.0"
+
+    // Database
+    runtimeOnly 'com.h2database:h2'
+    
+    // JSON Processing
+    implementation 'com.fasterxml.jackson.core:jackson-databind'
+    implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
+    
+    // Lombok
+    compileOnly "org.projectlombok:lombok:${lombokVersion}"
+    annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+    
+    // Testing
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+    testImplementation "org.springframework.kafka:spring-kafka-test:${springKafkaVersion}"
+    testImplementation "org.testcontainers:testcontainers:${testcontainersVersion}"
+    testImplementation "org.testcontainers:kafka:${testcontainersVersion}"
+    testImplementation "org.testcontainers:junit-jupiter:${testcontainersVersion}"
+    testImplementation "org.assertj:assertj-core:${assertjVersion}"
+    testImplementation "org.hamcrest:hamcrest:${hamcrestVersion}"
+    testImplementation "org.hamcrest:hamcrest-library:${hamcrestVersion}"
+    
+    // Lombok for tests
+    testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
+    testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+}
+
+// Source sets for integration tests
+sourceSets {
+    integrationTest {
+        java {
+            compileClasspath += main.output + test.output
+            runtimeClasspath += main.output + test.output
+            srcDir file('src/integration-test/java')
+        }
+        resources.srcDir file('src/integration-test/resources')
+    }
+}
+
+// Integration test configuration
+configurations {
+    integrationTestImplementation.extendsFrom testImplementation
+    integrationTestRuntimeOnly.extendsFrom testRuntimeOnly
+}
+
+// Integration test task
+task integrationTest(type: Test) {
+    description = 'Runs integration tests.'
+    group = 'verification'
+    
+    testClassesDirs = sourceSets.integrationTest.output.classesDirs
+    classpath = sourceSets.integrationTest.runtimeClasspath
+    
+    shouldRunAfter test
+    
+    // Use junit platform for integration tests
+    useJUnitPlatform()
+    
+    // Optional: Run integration tests only when explicitly called
+    onlyIf {
+        project.hasProperty('integrationTest') || gradle.startParameter.taskNames.contains('integrationTest')
+    }
+}
+
+// Make check depend on integrationTest
+check.dependsOn integrationTest
+
+// JUnit 5 configuration for unit tests
+tasks.named('test') {
+    useJUnitPlatform()
+    
+    // Exclude integration tests from unit test task
+    exclude '**/*IntegrationTest*'
+    exclude '**/integration/**'
+}
+
+// JaCoCo configuration
+jacoco {
+    toolVersion = "0.8.11"
+}
+
+jacocoTestReport {
+    dependsOn test, integrationTest
+    
+    // Aggregate coverage from both unit and integration tests
+    executionData fileTree(project.buildDir).include("jacoco/*.exec")
+    
+    reports {
+        xml.required = true
+        html.required = true
+        csv.required = false
+        
+        html.outputLocation = layout.buildDirectory.dir('reports/jacoco')
+    }
+    
+    afterEvaluate {
+        classDirectories.setFrom(files(classDirectories.files.collect {
+            fileTree(dir: it, exclude: [
+                '**/dto/**',
+                '**/entity/**',
+                '**/config/**',
+                '**/*Application*',
+                '**/*Config*'
+            ])
+        }))
+    }
+}
+
+jacocoTestCoverageVerification {
+    dependsOn jacocoTestReport
+    
+    violationRules {
+        rule {
+            enabled = true
+            
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.80
+            }
+            
+            limit {
+                counter = 'BRANCH'
+                value = 'COVEREDRATIO'
+                minimum = 0.70
+            }
+        }
+        
+        rule {
+            enabled = true
+            element = 'CLASS'
+            
+            excludes = [
+                '*.dto.*',
+                '*.entity.*',
+                '*.config.*',
+                '*Application',
+                '*Config'
+            ]
+            
+            limit {
+                counter = 'LINE'
+                value = 'COVEREDRATIO'
+                minimum = 0.75
+            }
+        }
+    }
+}
+
+// Make check depend on coverage verification
+check.dependsOn jacocoTestCoverageVerification
+
+// Custom task to run all tests and generate coverage report
+task testCoverage {
+    dependsOn test, integrationTest, jacocoTestReport
+    description = 'Runs all tests and generates coverage report'
+    group = 'verification'
+}
+
+// Gradle wrapper configuration
+tasks.named('wrapper') {
+    gradleVersion = '8.6'
+    distributionType = Wrapper.DistributionType.BIN
+}
+
+// Spring Boot configuration
+springBoot {
+    buildInfo()
+}
+
+// Test logging configuration
+tasks.withType(Test) {
+    testLogging {
+        events "passed", "skipped", "failed"
+        exceptionFormat "full"
+        showStandardStreams = false
+        
+        afterSuite { desc, result ->
+            if (!desc.parent) {
+                println "\nTest Results: ${result.resultType}"
+                println "  Tests: ${result.testCount}"
+                println "  Passed: ${result.successfulTestCount}"
+                println "  Failed: ${result.failedTestCount}"
+                println "  Skipped: ${result.skippedTestCount}"
+            }
+        }
+    }
+}
+
+// Clean task enhancement
+clean {
+    delete 'out'
+}
+
+// Documentation
+task showDependencies {
+    doLast {
+        println "=== Production Dependencies ==="
+        configurations.runtimeClasspath.resolvedConfiguration.resolvedArtifacts.each {
+            println "  ${it.name}"
+        }
+        println "\n=== Test Dependencies ==="
+        configurations.testRuntimeClasspath.resolvedConfiguration.resolvedArtifacts.each {
+            println "  ${it.name}"
+        }
+    }
+}
