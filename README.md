@@ -223,8 +223,8 @@ View the report at: `build/reports/jacoco/index.html`
 ```
 
 **Coverage Thresholds:**
-- Line Coverage: 80%
-- Branch Coverage: 70%
+- Line Coverage: WIP
+- Branch Coverage: WIP
 
 ### Test with Coverage in One Command
 
@@ -429,7 +429,7 @@ connect to <localhost:9876> failed
 ### Code Quality
 
 The project enforces code quality through:
-- JaCoCo coverage thresholds (80% line, 70% branch)
+- JaCoCo coverage thresholds (WIP)
 - Unit and integration test requirements
 - Spring Boot best practices
 - Clean architecture with separation of concerns
