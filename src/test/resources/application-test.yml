@@ -1,0 +1,62 @@
+spring:
+  application:
+    name: sports-betting-settlement-test
+
+  # H2 Database for tests
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  h2:
+    console:
+      enabled: false
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+
+  # Disable SQL initialization for tests (we create data in tests)
+  sql:
+    init:
+      mode: never
+
+  # Kafka Configuration for tests (will be overridden by Testcontainers)
+  kafka:
+    bootstrap-servers: localhost:9092
+
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+
+    consumer:
+      group-id: betting-settlement-test-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      properties:
+        spring.json.trusted.packages: "com.betting.settlement.dto"
+
+# Application Configuration
+application:
+  kafka:
+    topics:
+      event-outcomes: event-outcomes-test
+
+  # Always use mock RocketMQ in tests
+  rocketmq:
+    enabled: false
+
+# Logging for tests
+logging:
+  level:
+    root: INFO
+    com.betting.settlement: DEBUG
+    org.springframework.kafka: WARN
+    org.hibernate: WARN

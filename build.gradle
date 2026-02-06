@@ -5,7 +5,7 @@ plugins {
     id 'jacoco'
 }
 
-group = 'com.sportygroup'
+group = 'com.betting'
 version = '1.0.0-SNAPSHOT'
 
 java {
@@ -26,7 +26,7 @@ repositories {
 ext {
     springKafkaVersion = '3.1.4'
     kafkaVersion = '3.6.2'
-    rocketmqVersion = '5.1.4'
+    rocketmqVersion = '5.2.0'
     lombokVersion = '1.18.32'
     testcontainersVersion = '1.19.7'
     assertjVersion = '3.25.3'
@@ -39,26 +39,25 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
     implementation 'org.springframework.boot:spring-boot-starter-actuator'
-    
+
     // Kafka
     implementation "org.springframework.kafka:spring-kafka:${springKafkaVersion}"
-    
+
     // RocketMQ (Optional - can be mocked)
-    //implementation "org.apache.rocketmq:rocketmq-client-java:${rocketmqVersion}"
+    implementation "org.apache.rocketmq:rocketmq-client-java:${rocketmqVersion}"
     // Alternative: implementation 'org.apache.rocketmq:rocketmq-spring-boot-starter:2.3.0'
-    implementation "org.apache.rocketmq:rocketmq-spring-boot-starter:2.3.0"
 
     // Database
     runtimeOnly 'com.h2database:h2'
-    
+
     // JSON Processing
     implementation 'com.fasterxml.jackson.core:jackson-databind'
     implementation 'com.fasterxml.jackson.datatype:jackson-datatype-jsr310'
-    
+
     // Lombok
     compileOnly "org.projectlombok:lombok:${lombokVersion}"
     annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
-    
+
     // Testing
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testImplementation "org.springframework.kafka:spring-kafka-test:${springKafkaVersion}"
@@ -68,7 +67,8 @@ dependencies {
     testImplementation "org.assertj:assertj-core:${assertjVersion}"
     testImplementation "org.hamcrest:hamcrest:${hamcrestVersion}"
     testImplementation "org.hamcrest:hamcrest-library:${hamcrestVersion}"
-    
+    testImplementation 'org.awaitility:awaitility:4.2.0'
+
     // Lombok for tests
     testCompileOnly "org.projectlombok:lombok:${lombokVersion}"
     testAnnotationProcessor "org.projectlombok:lombok:${lombokVersion}"
@@ -96,15 +96,15 @@ configurations {
 task integrationTest(type: Test) {
     description = 'Runs integration tests.'
     group = 'verification'
-    
+
     testClassesDirs = sourceSets.integrationTest.output.classesDirs
     classpath = sourceSets.integrationTest.runtimeClasspath
-    
+
     shouldRunAfter test
-    
+
     // Use junit platform for integration tests
     useJUnitPlatform()
-    
+
     // Optional: Run integration tests only when explicitly called
     onlyIf {
         project.hasProperty('integrationTest') || gradle.startParameter.taskNames.contains('integrationTest')
@@ -117,7 +117,7 @@ check.dependsOn integrationTest
 // JUnit 5 configuration for unit tests
 tasks.named('test') {
     useJUnitPlatform()
-    
+
     // Exclude integration tests from unit test task
     exclude '**/*IntegrationTest*'
     exclude '**/integration/**'
@@ -130,26 +130,26 @@ jacoco {
 
 jacocoTestReport {
     dependsOn test, integrationTest
-    
+
     // Aggregate coverage from both unit and integration tests
     executionData fileTree(project.buildDir).include("jacoco/*.exec")
-    
+
     reports {
         xml.required = true
         html.required = true
         csv.required = false
-        
+
         html.outputLocation = layout.buildDirectory.dir('reports/jacoco')
     }
-    
+
     afterEvaluate {
         classDirectories.setFrom(files(classDirectories.files.collect {
             fileTree(dir: it, exclude: [
-                '**/dto/**',
-                '**/entity/**',
-                '**/config/**',
-                '**/*Application*',
-                '**/*Config*'
+                    '**/dto/**',
+                    '**/entity/**',
+                    '**/config/**',
+                    '**/*Application*',
+                    '**/*Config*'
             ])
         }))
     }
@@ -157,36 +157,36 @@ jacocoTestReport {
 
 jacocoTestCoverageVerification {
     dependsOn jacocoTestReport
-    
+
     violationRules {
         rule {
             enabled = true
-            
+
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
                 minimum = 0.80
             }
-            
+
             limit {
                 counter = 'BRANCH'
                 value = 'COVEREDRATIO'
                 minimum = 0.70
             }
         }
-        
+
         rule {
             enabled = true
             element = 'CLASS'
-            
+
             excludes = [
-                '*.dto.*',
-                '*.entity.*',
-                '*.config.*',
-                '*Application',
-                '*Config'
+                    '*.dto.*',
+                    '*.entity.*',
+                    '*.config.*',
+                    '*Application',
+                    '*Config'
             ]
-            
+
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
@@ -223,7 +223,7 @@ tasks.withType(Test) {
         events "passed", "skipped", "failed"
         exceptionFormat "full"
         showStandardStreams = false
-        
+
         afterSuite { desc, result ->
             if (!desc.parent) {
                 println "\nTest Results: ${result.resultType}"
