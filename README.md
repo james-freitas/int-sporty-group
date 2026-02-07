@@ -97,7 +97,7 @@ The application will start on `http://localhost:8080`
 
 Alternative: Run using the JAR file:
 ```bash
-java -jar build/libs/int-sporty-group-1.0.0-SNAPSHOT.jar
+java -jar build/libs/int-sporty-group-1.0.0.jar
 ```
 
 ### 5. Verify Application is Running
