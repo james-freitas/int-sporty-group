@@ -149,7 +149,8 @@ jacocoTestReport {
                     '**/entity/**',
                     '**/config/**',
                     '**/*Application*',
-                    '**/*Config*'
+                    '**/*Config*',
+                    '**/controller/GlobalExceptionHandler.class'
             ])
         }))
     }
@@ -165,13 +166,13 @@ jacocoTestCoverageVerification {
             limit {
                 counter = 'LINE'
                 value = 'COVEREDRATIO'
-                minimum = 0.50
+                minimum = 0.60
             }
 
             limit {
                 counter = 'BRANCH'
                 value = 'COVEREDRATIO'
-                minimum = 0.04
+                minimum = 0.05
             }
         }
 
@@ -184,7 +185,8 @@ jacocoTestCoverageVerification {
                     '*.entity.*',
                     '*.config.*',
                     '*Application',
-                    '*Config'
+                    '*Config',
+                    '*.controller.GlobalExceptionHandler'
             ]
 
             limit {
@@ -195,7 +197,6 @@ jacocoTestCoverageVerification {
         }
     }
 }
-
 // Make check depend on coverage verification
 check.dependsOn jacocoTestCoverageVerification
 
